@@ -1,0 +1,24 @@
+# Local credentials and environment
+.env
+.env.*
+!.env.example
+
+# Terraform generated data (never commit state, plans, or local variables)
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+
+# Database and recovery artifacts
+runtime/
+backups/
+wal-archive/
+recovery-data/
+
+# Logs and exported backups
+*.log
+*.backup
+*.tar
+*.gz

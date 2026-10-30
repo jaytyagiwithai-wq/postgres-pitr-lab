@@ -1,0 +1,88 @@
+name: postgres-pitr-lab
+
+services:
+  primary:
+    build:
+      context: ./postgres
+      dockerfile: Dockerfile
+    image: postgres-pitr-lab:16-walg
+    container_name: pitr-primary
+
+    ports:
+      - "127.0.0.1:55432:5432"
+
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB}"
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:?Export temporary AWS credentials first}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:?Export temporary AWS credentials first}"
+      AWS_SESSION_TOKEN: "${AWS_SESSION_TOKEN:?Export temporary AWS credentials first}"
+      AWS_REGION: "${AWS_REGION:-ap-northeast-1}"
+
+      WALG_S3_PREFIX: "${WALG_S3_PREFIX:?Export the WAL-G S3 prefix first}"
+      WALG_S3_SSE: "AES256"
+
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/primary.conf
+
+    volumes:
+      - primary_data:/var/lib/postgresql/data
+      - ./postgres/primary.conf:/etc/postgresql/primary.conf:ro
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+    stop_grace_period: 30s
+
+  recovery:
+    image: postgres-pitr-lab:16-walg
+    container_name: pitr-recovery
+    profiles:
+      - recovery
+
+    ports:
+      - "127.0.0.1:55433:5432"
+
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB}"
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:?Export temporary AWS credentials first}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:?Export temporary AWS credentials first}"
+      AWS_SESSION_TOKEN: "${AWS_SESSION_TOKEN:?Export temporary AWS credentials first}"
+      AWS_REGION: "${AWS_REGION:-ap-northeast-1}"
+      AWS_EC2_METADATA_DISABLED: "true"
+
+      WALG_S3_PREFIX: "${WALG_S3_PREFIX:?Export the WAL-G S3 prefix first}"
+      WALG_BACKUP_NAME: "${WALG_BACKUP_NAME:?Export the WAL-G backup name first}"
+      RECOVERY_TARGET_TIME: "${RECOVERY_TARGET_TIME:?Export the recovery target time first}"
+
+    volumes:
+      - recovery_data:/var/lib/postgresql/data
+      - ./scripts/prepare-recovery.sh:/usr/local/bin/prepare-recovery.sh:ro
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+    stop_grace_period: 30s
+
+volumes:
+  primary_data:
+  recovery_data:
